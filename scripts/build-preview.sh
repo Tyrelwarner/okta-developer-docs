@@ -11,24 +11,9 @@ if [ -z "$NETLIFY_AUTH_TOKEN" ] || [ -z "$NETLIFY_SITE_ID" ]; then
   exit 1
 fi
 
-echo "Installing NVM..."
-
-export NVM_DIR="$HOME/.nvm"
-
-if [ ! -d "$NVM_DIR" ]; then
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
-fi
-
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
 echo "Installing Node 16..."
-nvm install 16
-nvm use 16
 
-echo "Node version:"
-node -v
-echo "NPM version:"
-npm -v
+setup_service node v16.20.2
 
 echo "Installing Yarn..."
 npm install -g yarn
@@ -37,7 +22,7 @@ echo "Installing dependencies..."
 yarn install --frozen-lockfile --ignore-platform
 
 echo "Building preview..."
-yarn build
+yarn build-with-redirect
 
 echo "Deploying preview to Netlify..."
 
@@ -46,6 +31,25 @@ if [ -n "$BRANCH" ]; then
 
   echo "Preview link:"
   echo "https://${BRANCH}--dev-docs-preview.netlify.app"
+
+  export SHA_LINK="https://github.com/okta/okta-developer-docs/commit/${SHA}"
+  export BACON_LINK="https://bacon-go.aue1e.saasure.net/commits?artifact=okta-developer-docs&sha=${SHA}"
+  export BRANCH_LINK="https://github.com/okta/okta-developer-docs/compare/${BRANCH}"
+
+  if [[ -n "$AUTHOR" ]]; then
+    AUTHOR_USERNAME="${AUTHOR%@*}"
+    export AUTHOR_SLACK_HANDLE="@${AUTHOR_USERNAME}"
+  else
+    echo "Error: AUTHOR environment variable is not set. Cannot determine Slack handle for notifications. Exiting..."
+    exit 1
+  fi
+
+  export PREVIEW_URL="https://${BRANCH}--dev-docs-preview.netlify.app"
+
+  send_slack_message "${AUTHOR_SLACK_HANDLE}" \
+      "Preview for your topic branch <${BRANCH_LINK}|${BRANCH}> is ready :white_check_mark:" \
+      "Preview: ${PREVIEW_URL} \n Bacon: <${BACON_LINK}|${SHA}>"\
+      "good"
 
 else
   echo "No pull request detected. Not deploying to Netlify."
